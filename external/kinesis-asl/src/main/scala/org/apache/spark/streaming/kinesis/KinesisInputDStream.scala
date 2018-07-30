@@ -90,6 +90,7 @@ private[kinesis] class KinesisInputDStream[T: ClassTag](
           " it may not be possible to recover from failures")
         super.createBlockRDD(time, blockInfos)
       }
+    }
   }
 
   override def getReceiver(): Receiver[T] = {
