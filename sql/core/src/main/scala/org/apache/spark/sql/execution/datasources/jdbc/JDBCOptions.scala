@@ -119,9 +119,9 @@ class JDBCOptions(
   // the column used to partition
   val partitionColumn = parameters.get(JDBC_PARTITION_COLUMN)
   // the lower bound of partition column
-  val lowerBound = parameters.get(JDBC_LOWER_BOUND).map(_.toLong)
+  val lowerBound = parameters.get(JDBC_LOWER_BOUND)
   // the upper bound of the partition column
-  val upperBound = parameters.get(JDBC_UPPER_BOUND).map(_.toLong)
+  val upperBound = parameters.get(JDBC_UPPER_BOUND)
   // numPartitions is also used for data source writing
   require((partitionColumn.isEmpty && lowerBound.isEmpty && upperBound.isEmpty) ||
     (partitionColumn.isDefined && lowerBound.isDefined && upperBound.isDefined &&
@@ -137,9 +137,13 @@ class JDBCOptions(
        |the partition columns using the supplied subquery alias to resolve any ambiguity.
        |Example :
        |spark.read.format("jdbc")
-       |        .option("dbtable", "(select c1, c2 from t1) as subq")
-       |        .option("partitionColumn", "subq.c1"
-       |        .load()
+       |  .option("url", jdbcUrl)
+       |  .option("dbtable", "(select c1, c2 from t1) as subq")
+       |  .option("partitionColumn", "c1")
+       |  .option("lowerBound", "1")
+       |  .option("upperBound", "100")
+       |  .option("numPartitions", "3")
+       |  .load()
      """.stripMargin
   )
 
