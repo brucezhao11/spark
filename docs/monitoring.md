@@ -2,13 +2,28 @@
 layout: global
 title: Monitoring and Instrumentation
 description: Monitoring, metrics, and instrumentation guide for Spark SPARK_VERSION_SHORT
+license: |
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+ 
+     http://www.apache.org/licenses/LICENSE-2.0
+ 
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
 ---
 
 There are several ways to monitor Spark applications: web UIs, metrics, and external instrumentation.
 
 # Web Interfaces
 
-Every SparkContext launches a web UI, by default on port 4040, that
+Every SparkContext launches a [Web UI](web-ui.html), by default on port 4040, that
 displays useful information about the application. This includes:
 
 * A list of scheduler stages and tasks
@@ -175,7 +190,11 @@ Security options for the Spark History Server are covered more detail in the
     <td>1d</td>
     <td>
       How often the filesystem job history cleaner checks for files to delete.
-      Files are only deleted if they are older than <code>spark.history.fs.cleaner.maxAge</code>
+      Files are deleted if at least one of two conditions holds.
+      First, they're deleted if they're older than <code>spark.history.fs.cleaner.maxAge</code>.
+      They are also deleted if the number of files is more than
+      <code>spark.history.fs.cleaner.maxNum</code>, Spark tries to clean up the completed attempts
+      from the applications based on the order of their oldest attempt time.
     </td>
   </tr>
   <tr>
@@ -183,6 +202,16 @@ Security options for the Spark History Server are covered more detail in the
     <td>7d</td>
     <td>
       Job history files older than this will be deleted when the filesystem history cleaner runs.
+    </td>
+  </tr>
+  <tr>
+    <td>spark.history.fs.cleaner.maxNum</td>
+    <td>Int.MaxValue</td>
+    <td>
+      The maximum number of files in the event log directory.
+      Spark tries to clean up the completed attempt logs to maintain the log directory under this limit.
+      This should be smaller than the underlying file system limit like
+      `dfs.namenode.fs-limits.max-directory-items` in HDFS.
     </td>
   </tr>
   <tr>
@@ -609,7 +638,150 @@ A list of the available metrics, with a short description:
   </tr>
 </table>
 
+### Executor Metrics
 
+Executor-level metrics are sent from each executor to the driver as part of the Heartbeat to describe the performance metrics of Executor itself like JVM heap memory, GC information. Metrics `peakExecutorMetrics.*` are only enabled if `spark.eventLog.logStageExecutorMetrics.enabled` is true.
+A list of the available metrics, with a short description:
+
+<table class="table">
+  <tr><th>Executor Level Metric name</th>
+      <th>Short description</th>
+  </tr>
+  <tr>
+    <td>totalGCTime</td>
+    <td>Elapsed time the JVM spent in garbage collection summed in this Executor.
+    The value is expressed in milliseconds.</td>
+  </tr>
+  <tr>
+    <td>totalInputBytes</td>
+    <td>Total input bytes summed in this Executor.</td>
+  </tr>
+  <tr>
+    <td>totalShuffleRead</td>
+    <td>Total shuffer read bytes summed in this Executor.</td>
+  </tr>
+  <tr>
+    <td>totalShuffleWrite</td>
+    <td>Total shuffer write bytes summed in this Executor.</td>
+  </tr>
+  <tr>
+    <td>maxMemory</td>
+    <td>Total amount of memory available for storage, in bytes.</td>
+  </tr>
+  <tr>
+    <td>memoryMetrics.*</td>
+    <td>Current value of memory metrics:</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.usedOnHeapStorageMemory</td>
+    <td>Used on heap memory currently for storage, in bytes.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.usedOffHeapStorageMemory</td>
+    <td>Used off heap memory currently for storage, in bytes.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.totalOnHeapStorageMemory</td>
+    <td>Total available on heap memory for storage, in bytes. This amount can vary over time,  on the MemoryManager implementation.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.totalOffHeapStorageMemory</td>
+    <td>Total available off heap memory for storage, in bytes. This amount can vary over time, depending on the MemoryManager implementation.</td>
+  </tr>
+  <tr>
+    <td>peakMemoryMetrics.*</td>
+    <td>Peak value of memory (and GC) metrics:</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.JVMHeapMemory</td>
+    <td>Peak memory usage of the heap that is used for object allocation.
+    The heap consists of one or more memory pools. The used and committed size of the returned memory usage is the sum of those values of all heap memory pools whereas the init and max size of the returned memory usage represents the setting of the heap memory which may not be the sum of those of all heap memory pools.
+    The amount of used memory in the returned memory usage is the amount of memory occupied by both live objects and garbage objects that have not been collected, if any.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.JVMOffHeapMemory</td>
+    <td>Peak memory usage of non-heap memory that is used by the Java virtual machine. The non-heap memory consists of one or more memory pools. The used and committed size of the returned memory usage is the sum of those values of all non-heap memory pools whereas the init and max size of the returned memory usage represents the setting of the non-heap memory which may not be the sum of those of all non-heap memory pools.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.OnHeapExecutionMemory</td>
+    <td>Peak on heap execution memory in use, in bytes.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.OffHeapExecutionMemory</td>
+    <td>Peak off heap execution memory in use, in bytes.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.OnHeapStorageMemory</td>
+    <td>Peak on heap storage memory in use, in bytes.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.OffHeapStorageMemory</td>
+    <td>Peak off heap storage memory in use, in bytes.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.OnHeapUnifiedMemory</td>
+    <td>Peak on heap memory (execution and storage).</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.OffHeapUnifiedMemory</td>
+    <td>Peak off heap memory (execution and storage).</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.DirectPoolMemory</td>
+    <td>Peak memory that the JVM is using for direct buffer pool ([[java.lang.management.BufferPoolMXBean]])</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.MappedPoolMemory</td>
+    <td>Peak memory that the JVM is using for mapped buffer pool ([[java.lang.management.BufferPoolMXBean]])</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.ProcessTreeJVMVMemory</td>
+    <td>Virtual memory size in bytes. Enabled if spark.eventLog.logStageExecutorProcessTreeMetrics.enabled is true.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.ProcessTreeJVMRSSMemory</td>
+    <td>Resident Set Size: number of pages the process has
+      in real memory.  This is just the pages which count
+      toward text, data, or stack space.  This does not
+      include pages which have not been demand-loaded in,
+      or which are swapped out. Enabled if spark.eventLog.logStageExecutorProcessTreeMetrics.enabled is true.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.ProcessTreePythonVMemory</td>
+    <td>Virtual memory size for Python in bytes. Enabled if spark.eventLog.logStageExecutorProcessTreeMetrics.enabled is true.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.ProcessTreePythonRSSMemory</td>
+    <td>Resident Set Size for Python. Enabled if spark.eventLog.logStageExecutorProcessTreeMetrics.enabled is true.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.ProcessTreeOtherVMemory</td>
+    <td>Virtual memory size for other kind of process in bytes. Enabled if spark.eventLog.logStageExecutorProcessTreeMetrics.enabled is true.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.ProcessTreeOtherRSSMemory</td>
+    <td>Resident Set Size for other kind of process. Enabled if spark.eventLog.logStageExecutorProcessTreeMetrics.enabled is true.</td>
+  </tr>
+    <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.MinorGCCount</td>
+    <td>Total minor GC count. For example, the garbage collector is one of     Copy, PS Scavenge, ParNew, G1 Young Generation and so on.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.MinorGCTime</td>
+    <td>Elapsed total minor GC time. 
+    The value is expressed in milliseconds.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.MajorGCCount</td>
+    <td>Total major GC count. For example, the garbage collector is one of     MarkSweepCompact, PS MarkSweep, ConcurrentMarkSweep, G1 Old Generation and so on.</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;&nbsp;&nbsp;.MajorGCTime</td>
+    <td>Elapsed total major GC time. 
+    The value is expressed in milliseconds.</td>
+  </tr>
+</table>
+The computation of RSS and Vmem are based on [proc(5)](http://man7.org/linux/man-pages/man5/proc.5.html)
 
 ### API Versioning Policy
 
@@ -672,6 +844,7 @@ Each instance can report to zero or more _sinks_. Sinks are contained in the
 * `CSVSink`: Exports metrics data to CSV files at regular intervals.
 * `JmxSink`: Registers metrics for viewing in a JMX console.
 * `MetricsServlet`: Adds a servlet within the existing Spark UI to serve metrics data as JSON data.
+* `PrometheusServlet`: Adds a servlet within the existing Spark UI to serve metrics data in Prometheus format.
 * `GraphiteSink`: Sends metrics to a Graphite node.
 * `Slf4jSink`: Sends metrics to slf4j as log entries.
 * `StatsdSink`: Sends metrics to a StatsD node.
@@ -704,6 +877,7 @@ This example shows a list of Spark configuration parameters for a Graphite sink:
 "spark.metrics.conf.*.sink.graphite.period"=10
 "spark.metrics.conf.*.sink.graphite.unit"=seconds
 "spark.metrics.conf.*.sink.graphite.prefix"="optional_prefix"
+"spark.metrics.conf.*.sink.graphite.regex"="optional_regex_to_send_matching_metrics"
 ```
 
 Default values of the Spark metrics configuration are as follows:
@@ -749,6 +923,8 @@ This is the component with the largest amount of instrumented metrics
   - memory.remainingOnHeapMem_MB
 
 - namespace=HiveExternalCatalog
+  - **note:**: these metrics are conditional to a configuration parameter:
+    `spark.metrics.staticSources.enabled` (default is true) 
   - fileCacheHits.count
   - filesDiscovered.count
   - hiveClientCalls.count
@@ -756,6 +932,8 @@ This is the component with the largest amount of instrumented metrics
   - partitionsFetched.count
 
 - namespace=CodeGenerator
+  - **note:**: these metrics are conditional to a configuration parameter:
+    `spark.metrics.staticSources.enabled` (default is true) 
   - compilationTime (histogram)
   - generatedClassSize (histogram)
   - generatedMethodSize (histogram)
@@ -784,10 +962,11 @@ This is the component with the largest amount of instrumented metrics
   - queue.executorManagement.listenerProcessingTime (timer)
 
 - namespace=appStatus (all metrics of type=counter)
-  - **note:** Introduced in Spark 3.0. Conditional to configuration parameter:  
-   `spark.app.status.metrics.enabled=true` (default is false)
+  - **note:** Introduced in Spark 3.0. Conditional to a configuration parameter:  
+   `spark.metrics.appStatusSource.enabled` (default is false)
   - stages.failedStages.count
   - stages.skippedStages.count
+  - stages.completedStages.count
   - tasks.blackListedExecutors.count
   - tasks.completedTasks.count
   - tasks.failedTasks.count
@@ -804,7 +983,7 @@ This is the component with the largest amount of instrumented metrics
   - LongAccumulatorSource
 
 - namespace=spark.streaming
-  - **note** applies to Spark Structured Streaming only. Conditional to a configuration
+  - **note:** This applies to Spark Structured Streaming only. Conditional to a configuration
   parameter: `spark.sql.streaming.metricsEnabled=true` (default is false) 
   - eventTime-watermark
   - inputRate-total
@@ -812,6 +991,20 @@ This is the component with the largest amount of instrumented metrics
   - processingRate-total
   - states-rowsTotal
   - states-usedBytes
+
+- namespace=JVMCPU
+  - jvmCpuTime
+
+- namespace=ExecutorMetrics
+  - **note:** these metrics are conditional to a configuration parameter:
+    `spark.metrics.executorMetricsSource.enabled` (default is true) 
+  - This source contains memory-related metrics. A full list of available metrics in this 
+    namespace can be found in the corresponding entry for the Executor component instance.
+ 
+- namespace=plugin.\<Plugin Class Name>
+  - Optional namespace(s). Metrics in this namespace are defined by user-supplied code, and
+  configured using the Spark plugin API. See "Advanced Instrumentation" below for how to load
+  custom plugins into Spark.
 
 ### Component instance = Executor
 These metrics are exposed by Spark executors. Note, currently they are not available
@@ -834,7 +1027,6 @@ when running in local mode.
   - filesystem.hdfs.read_ops
   - filesystem.hdfs.write_bytes
   - filesystem.hdfs.write_ops
-  - jvmCpuTime
   - jvmGCTime.count
   - memoryBytesSpilled.count
   - recordsRead.count
@@ -853,10 +1045,50 @@ when running in local mode.
   - shuffleRemoteBytesReadToDisk.count
   - shuffleTotalBytesRead.count
   - shuffleWriteTime.count
+  - succeededTasks.count
   - threadpool.activeTasks
   - threadpool.completeTasks
   - threadpool.currentPool_size
   - threadpool.maxPool_size
+  - threadpool.startedTasks
+
+- namespace=ExecutorMetrics
+  - **notes:** 
+    - These metrics are conditional to a configuration parameter:
+    `spark.metrics.executorMetricsSource.enabled` (default value is true) 
+    - ExecutorMetrics are updated as part of heartbeat processes scheduled
+   for the executors and for the driver at regular intervals: `spark.executor.heartbeatInterval` (default value is 10 seconds)
+    - An optional faster polling mechanism is available for executor memory metrics, 
+   it can be activated by setting a polling interval (in milliseconds) using the configuration parameter `spark.executor.metrics.pollingInterval`
+  - JVMHeapMemory
+  - JVMOffHeapMemory
+  - OnHeapExecutionMemory
+  - OnHeapStorageMemory
+  - OnHeapUnifiedMemory
+  - OffHeapExecutionMemory
+  - OffHeapStorageMemory
+  - OffHeapUnifiedMemory
+  - DirectPoolMemory
+  - MappedPoolMemory
+  - MinorGCCount
+  - MinorGCTime
+  - MajorGCCount
+  - MajorGCTime
+  - "ProcessTree*" metric counters:
+    - ProcessTreeJVMVMemory
+    - ProcessTreeJVMRSSMemory
+    - ProcessTreePythonVMemory
+    - ProcessTreePythonRSSMemory
+    - ProcessTreeOtherVMemory
+    - ProcessTreeOtherRSSMemory
+    - **note:** "ProcessTree*" metrics are collected only under certain conditions.
+      The conditions are the logical AND of the following: `/proc` filesystem exists,
+      `spark.eventLog.logStageExecutorProcessTreeMetrics.enabled=true`,
+      `spark.eventLog.logStageExecutorMetrics.enabled=true`.
+      "ProcessTree*" metrics report 0 when those conditions are not met.
+
+- namespace=JVMCPU
+  - jvmCpuTime
 
 - namespace=NettyBlockTransfer
   - shuffle-client.usedDirectMemory
@@ -865,6 +1097,8 @@ when running in local mode.
   - shuffle-server.usedHeapMemory
 
 - namespace=HiveExternalCatalog
+  - **note:**: these metrics are conditional to a configuration parameter:
+    `spark.metrics.staticSources.enabled` (default is true) 
   - fileCacheHits.count
   - filesDiscovered.count
   - hiveClientCalls.count
@@ -872,11 +1106,18 @@ when running in local mode.
   - partitionsFetched.count
 
 - namespace=CodeGenerator
+  - **note:**: these metrics are conditional to a configuration parameter:
+    `spark.metrics.staticSources.enabled` (default is true) 
   - compilationTime (histogram)
   - generatedClassSize (histogram)
   - generatedMethodSize (histogram)
   - hiveClientCalls.count
   - sourceCodeSize (histogram)
+
+- namespace=plugin.\<Plugin Class Name>
+  - Optional namespace(s). Metrics in this namespace are defined by user-supplied code, and
+  configured using the Spark plugin API. See "Advanced Instrumentation" below for how to load
+  custom plugins into Spark.
 
 ### Source = JVM Source 
 Notes: 
@@ -927,12 +1168,13 @@ Note: applies when running in Spark standalone as worker
 - coresFree
 - memFree_MB
 
-## Component instance = shuffleService
+### Component instance = shuffleService
 Note: applies to the shuffle service
 
 - blockTransferRateBytes (meter)
 - numActiveConnections.count
 - numRegisteredConnections.count
+- numCaughtExceptions.count
 - openBlockRequestLatencyMillis (histogram)
 - registerExecutorRequestLatencyMillis (histogram)
 - registeredExecutorsSize
@@ -953,3 +1195,21 @@ can provide fine-grained profiling on individual nodes.
 * JVM utilities such as `jstack` for providing stack traces, `jmap` for creating heap-dumps,
 `jstat` for reporting time-series statistics and `jconsole` for visually exploring various JVM
 properties are useful for those comfortable with JVM internals.
+
+Spark also provides a plugin API so that custom instrumentation code can be added to Spark
+applications. There are two configuration keys available for loading plugins into Spark:
+
+- <code>spark.plugins</code>
+- <code>spark.plugins.defaultList</code>
+
+Both take a comma-separated list of class names that implement the
+<code>org.apache.spark.api.plugin.SparkPlugin</code> interface. The two names exist so that it's
+possible for one list to be placed in the Spark default config file, allowing users to
+easily add other plugins from the command line without overwriting the config file's list. Duplicate
+plugins are ignored.
+
+Distribution of the jar files containing the plugin code is currently not done by Spark. The user
+or admin should make sure that the jar files are available to Spark applications, for example, by
+including the plugin jar with the Spark distribution. The exception to this rule is the YARN
+backend, where the <code>--jars</code> command line option (or equivalent config entry) can be
+used to make the plugin code available to both executors and cluster-mode drivers.
